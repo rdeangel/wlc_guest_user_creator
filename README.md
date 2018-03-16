@@ -10,7 +10,7 @@ Download wlc_guest_user_creator from git
 	
 or
 
-	download wlc_guest_user_creator
+	download https://github.com/rdeangel/wlc_guest_user_creator/archive/master.zip
 
 
 
@@ -31,14 +31,14 @@ Example Script configuration file:
 	[ADMIN_NOTIFICATION_EMAIL]
 	AdminEmailSenderName = sender name for admin e-mails
 	AdminEmailSenderAddress = sender e-mail address for admin e-mails
-	AdminEmailReceiverName = receiver name for admin e-mails
-	AdminEmailReceiverAddress = receiver e-mail address for admin e-mails
+	AdminEmailReceiverName = receiver name for admin e-mails, multiple semicolon separated email receiver names can be added
+	AdminEmailReceiverAddress = receiver e-mail address for admin e-mails, multiple semicolon separated email receiver addresses can be added
 
 	[GLOBAL_PARAMETERS]
 	CsvFile = filename where job data is stored
 	CsvRowsSkip = number of top row to skip before job data starts
 	EmailServer = IP of smtp server
-	FileLogging = if file logging set this falue to True, for terminal logs set it to False
+	FileLogging = if file logging set this value to True, for terminal logs set it to False
 	LogFileName = filename where logs will be written if FileLogging is set to True
 
 	
@@ -57,6 +57,7 @@ Job ID definition file:
 	ssid   		Guest SSID Name
 	userType   	This is always guest, do not change
 	lifetime   	Lifetime of guest user in seconds starting from creation of user
+	timezone	Covert Active from and Active Until time in guest user credential e-mail and shows timezone + offset
 	description   	Description of users created
 	email   	Email address or recipient that will receive the SSID email with username and password
 
@@ -82,6 +83,8 @@ You will probably need to install the following:
 	pip install netmiko
 	pip install numpy
 	pip install configparser
+	pip install pytz
+	...maybe more or less package installation are required depending on your installation of python3
 
 
 
@@ -99,7 +102,7 @@ One or more job id argument defined in job_data.csv are required by the script t
 
 Example of running 3x job in the same script execution or schedule:
 
-    python wlc_guest_user_creator.py 1 2 3
+    python wlc_guest_user_creator.py JOB-ID1 JOB-ID2 JOB-ID3
 
 	
 
