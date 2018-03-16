@@ -1,0 +1,7 @@
+This file is used to define the job ids called from wlc_guest_user_creator.py script cli (the first 4 rows are ignored by the script). Sample job below:,,,,,,,,,,
+1,192.168.1.1,WLC01,GUEST_USER,5,2,Guest_Wireless_SSID,guest,86400,Added by Python Script,your.email@example.com
+-------------------------------------------------------------------------------------------------------------------------,,,,,,,,,,
+id,wlcIP,wlcName,user_prefix,userQty,wlanId,ssid,userType,lifetime,description,email
+1,192.168.0.50,WLC-TEST1,GUEST_TEST1,30,1,COMPANY_GUEST,guest,86400,Added by Python Script,guest_receiver1@example.com
+2,192.168.50.50,WLC-TEST2,GUEST_TEST2,10,1,COMPANY_GUEST,guest,86400,Added by Python Script,guest_receiver2@example.com
+3,192.168.100.50,WLC-TEST3,GUEST_TEST3,60,1,COMPANY_GUEST,guest,259200,Added by Python Script,guest_receiver3@example.com
