@@ -2,7 +2,7 @@
 
 """Cisco WLC Wifi Guest User Creator
 
-wlc_guest_user_creator - Version 1.4.0
+wlc_guest_user_creator - Version 1.5.1
 
 Written by Rocco De Angelis
 """
@@ -106,7 +106,7 @@ class email_SMTP(object):
         try:
             smtp_obj = smtplib.SMTP(self.host)
             smtp_obj.sendmail(self.sender, self.receiver, mimemsg.as_string())
-            print('Successfully sent email')
+            print('An e-mail has been successfully sent:\nSubject: "' + mimemsg['Subject'] + '"\nRecipient: ' + mimemsg['To'])
             return True
         except smtplib.SMTPException as e:
             print('Error: Unable to send email')
@@ -124,9 +124,7 @@ def script_start(print_time, fmtlog):
         script_start_time = datetime.utcnow()
         script_start_formatted = script_start_time.strftime(fmtlog)
         print('Script Start Time: ' + script_start_formatted)
-        print('-' * 100)
-        print('-' * 100)
-        print('-' * 100)
+        print(((('-' * 100) + "\n") * 2) + ('-' * 100))
         return script_start_time
 
 
@@ -134,20 +132,21 @@ def script_end(print_time, fmtlog):
     if print_time:
         script_end_time = datetime.utcnow()
         script_end_formatted = script_end_time.strftime(fmtlog)
-        print('-' * 100)
-        print('-' * 100)
-        print('-' * 100)
+        print(((('-' * 100) + "\n") * 2) + ('-' * 100))
         print('Script End Time: ' + script_end_formatted)
-        print('\n\n\n')
+        print('\n' * 3)
         return script_end_time
 
 
-def format_select_data(csv_data, entered_id, full_path_csv_file):
+def process_select_data(csv_data, entered_id, full_path_csv_file, log_full_path_file):
     id_idx = None
     id_list = []
+    process_error = []
 
     if len(csv_data) == 0:
-        print('No job ids exist!')
+        process_error.append('Error / Wireless Guest User Creation - Absence of jobs in data file')
+        process_error.append('No jobs exist in job data file: ' + full_path_csv_file + '\n\nAdd some jobs and run the script again!')
+        return [], [], [], process_error
     elif csv_data.ndim == 1:
         id_list.append(csv_data[0][0])
         id_idx = 0
@@ -158,15 +157,14 @@ def format_select_data(csv_data, entered_id, full_path_csv_file):
                 id_idx = i
 
     if id_list.count(entered_id) > 1:
-        print('Selected id ' + entered_id + ' is used more than once in the data file: ' + full_path_csv_file)
-        print('Remove duplicate ids and run the script again!')
-        print('-' * 100)
-        return None
+        process_error.append('Error / Wireless Guest User Creation - Duplicate job id')
+        process_error.append('Selected id "' + entered_id + '" is present more than once in the job data file: ' + full_path_csv_file + '\n\nRemove duplicate job ids and run the script again!')
+        return [], [], [], process_error
 
     if (id_idx == None) and (len(csv_data) != 0):
-        print('-'*100)
-        print('The selected id ' + str(entered_id) + ' doesn\'t exist!\n')
-        return None
+        process_error.append('Error / Wireless Guest User Creation - Unable to select job id')
+        process_error.append('The selected id "' + str(entered_id) + '" does not exist in data file: ' + full_path_csv_file)
+        return [], [], [], process_error
 
     if csv_data.ndim == 1:
         id = csv_data[0]
@@ -195,8 +193,9 @@ def format_select_data(csv_data, entered_id, full_path_csv_file):
         description = csv_data[id_idx][10]
         guest_email_receiver_address = csv_data[id_idx][11]
     else:
-        print("Something has gone wrong!\n")
-        return None
+        process_error.append('Error / Wireless Guest User Creation - Unknown error')
+        process_error.append('Something has gone wrong, not sure quite what though!\nFor more info check check log file: ' + log_full_path_file)
+        return [], [], [], process_error
 
     if id == str(entered_id):
         password_length = 8
@@ -217,11 +216,11 @@ def format_select_data(csv_data, entered_id, full_path_csv_file):
             user_credentials.append([[user],[password]])
         selected_data = [id, wlc_ip, wlc_name, user_prefix, user_qty, wlan_id, ssid, user_type, lifetime, timezone_code, description, guest_email_receiver_address]
         #Returns list of commands
-        return selected_data, command_list, user_credentials
+        return selected_data, command_list, user_credentials, ''
     else:
-        print(id, entered_id)
-        print('The selected id ' + str(entered_id) + ' doesn\'t exist!\n')
-        return None
+        process_error.append('Error / Wireless Guest User Creation - Unable to select job id')
+        process_error.append('The selected id ' + str(entered_id) + ' doesn\'t exist in data file: ' + full_path_csv_file)
+        return [], [], [], process_error
 
 
 def issue_commands_on_device(platform, wlc_name, wlc_ip, username, password, command_list):
@@ -240,7 +239,9 @@ def issue_commands_on_device(platform, wlc_name, wlc_ip, username, password, com
                 if creation_outcome != ('' or cli_failure_msg): creation_outcome = 'success'
             else:
                 command_result = re.sub(r'(.*?user add\ .*?\ )(.{8})(\ wlan.*?)', r'\1********\3', command_result, re.MULTILINE)
-                if (creation_outcome != ('' or cli_failure_msg)) and ((command_result == '\n') or ('Deleted user' in command_result) or (re.findall(r'.*?User.*?does\ not\ exist.*', command_result) is not None)):
+                if ((creation_outcome != ('' or cli_failure_msg)) and 
+                    ((command_result == '\n') or ('Deleted user' in command_result) or (re.findall(r'.*?User.*?does\ not\ exist.*', command_result) is not None)) and
+                	(re.findall(r'.*Guest\ user\ not\ added.*', command_result) == [])):
                     creation_outcome = 'success'
                 else:
                     creation_outcome = cli_failure_msg
@@ -325,6 +326,8 @@ def main(argv):
     config_file = os.path.join(os.path.dirname(os.path.realpath(__file__)),'config.ini')
     fmt = "%a %b %d %Y - %H:%M:00 %Z %z"
     fmtlog = "%a %b %d %Y - %H:%M:%S %Z %z"
+    successful_job_count = 0
+    failed_job_count = 0
     
     try:
         config = configparser.ConfigParser()
@@ -380,7 +383,7 @@ def main(argv):
     print('Testing availability of SMTP server: ' + email_server)
     email_test_result = test_email_server(email_server)
     if email_test_result:
-        print('-'*100)
+        print('-' * 100)
     else:
         script_end(True, fmtlog)
         fd.close()
@@ -403,22 +406,24 @@ def main(argv):
     try:
         csv_loaded_data = np.loadtxt(full_path_csv_file, dtype=str, delimiter=',', skiprows=int(csv_rows_skip))
     except:
-        print('Error: it is not possible to load data from file: ' + full_path_csv_file + '\n')
+        load_error = 'Error: it is not possible to correctly load job data from file: ' + full_path_csv_file + '\n'
+        print(load_error)
+        admin_email_subject = "Error / Wireless Guest User Creation - Unable to load job data file"
+        admin_email_msg = load_error
+        send_generic_mail(email_server, admin_email_sender_name, admin_email_sender_address, admin_email_receiver_name, admin_email_receiver_address, admin_email_subject, admin_email_msg)
         csv_exception_occurred = True
         
     for argument in argv:
         try:
-            selected_csv_data, commands, user_credentials = format_select_data(csv_loaded_data, argument, full_path_csv_file)
-        except IndexError as e:
-            if csv_exception_occurred != True:
-                print('Error: it is not possible to load data from file: ' + full_path_csv_file + '\n{0}'.format(e))
-                print('-'*100)
-                csv_exception_occurred = True
-            continue
+            selected_csv_data, commands, user_credentials, error_check = process_select_data(csv_loaded_data, argument, full_path_csv_file, log_full_path_file)
+            if ((type(error_check) == list) and (error_check[0] != "")):
+                raise Exception
         except:
             if csv_exception_occurred != True:
-                print('Error: it is not possible to load data from file: ' + full_path_csv_file)
-                print('-'*100)
+                admin_email_subject = error_check[0]
+                admin_email_msg = error_check[1]
+                send_generic_mail(email_server, admin_email_sender_name, admin_email_sender_address, admin_email_receiver_name, admin_email_receiver_address, admin_email_subject, admin_email_msg)
+                print(('-' * 100) + '\n' + admin_email_msg + '\n' + ('-' * 100))
                 csv_exception_occurred = True
             continue
             
@@ -456,32 +461,32 @@ def main(argv):
         else:
             wlc_creation_results = None
             print('Error: it is not possible to run a job with a non-matching count of WCL IPs and Names\n')
-            print('-'*100)
+            print('-' * 100)
             
         if (type(wlc_creation_results) == list):
             if wlc_creation_results.count("success") == len(wlc_ip):
                 wlc_creation_collective_result = 'success'
             else:
                 wlc_creation_collective_result = 'WLC bulk failure'
-                print('Error: one of the WLC listed in this job did not completed sucessfully. See logs for more info...\n')
-                print('-'*100)
+                print('Error: one of the WLC listed in this job did not completed sucessfully. See logs for more info...')
+                print('-' * 100)
         else:
             wlc_creation_collective_result = 'Syntax Error: wlc_ip and wlc_name values are incorrectly entered.<br>Check the number of wlc_ip and wlc_name items and make sure they are delimited by ;'
-            print('Error: one of the WLC listed in this job did not completed sucessfully. See logs for more info...\n')
-            print('-'*100)
+            print('Error: one of the WLC listed in this job did not completed sucessfully. See logs for more info...')
+            print('-' * 100)
             
         if wlc_creation_collective_result == 'success':
             #when a job has run succesfully run code below
-            
+            successful_job_count += 1
             #creating list of ids ran in this script execution
             id_list_pass.append(id)
             print('Wireless Guest users were successfully created')
-            print('-'*100)
+            print('-' * 100)
             
             #Send e-mail for each guest created
             print('\nSending e-mails to recipient: ' + fmt_guest_email_receiver_address + '\n' + '-' * 100) 
             send_guest_user_mail(user_credentials, ssid, 'guest', localized_date_start, localized_date_end, email_server, guest_email_sender_name, guest_email_sender_address, guest_email_receiver_address)
-            print('-'*100)
+            print('-' * 100)
             print('\n\n\n')
             
             #Formats wireless user creation e-mail that is later send out out to the Admin
@@ -512,6 +517,7 @@ def main(argv):
             #removing continue will generate multiple Wireless Guest User Creation Report for each Sucessful job
             continue
         else:
+            failed_job_count += 1
             err_msg = 'An error occurred in the Wireless Guest User Creation script.<br><br>Job id ' + argument + ' failed due to the following reason:<br>'
             if wlc_creation_collective_result == 'WLC bulk failure':
                 for i in range(len(wlc_ip)):
@@ -554,19 +560,28 @@ def main(argv):
                 'Email Recipient: %s<br>'
             ) % (user_prefix, user_qty, wlan_id, ssid, user_type, lifetime, timezone_code, description, fmt_guest_email_receiver_address)
             
-            print('-'*100)
+            print('-' * 100)
             print('\n\n')
             admin_email_subject = 'Error / Wireless Guest User Creation - job id ' + argument + ' failed.'
             admin_email_msg = err_msg
             print('\nSending e-mail to Admin Recipient: ' + fmt_admin_email_receiver_address + '\n' + admin_email_subject + '\n' + '-' * 100)
             print(admin_email_msg)
-            print('-'*100)
+            print('-' * 100)
             send_generic_mail(email_server, admin_email_sender_name, admin_email_sender_address, admin_email_receiver_name, admin_email_receiver_address, admin_email_subject, admin_email_msg)
-            print('-'*100)
+            print('-' * 100)
             print('\n\n\n')
             
     if users_email_qty_sent > 0:
-        admin_email_msg = 'A total of %s guest e-mails have been sent out:<br><br>' % (users_email_qty_sent)
+        #admin_email_msg = 'Total number of guest e-mails sent out for all jobs: %s<br><br>Successful Jobs: %s<br><br>Failed Jobs: %s<br><br>' % (users_email_qty_sent, str(successful_job_count), str(failed_job_count)) 
+        admin_email_msg = (
+            '--------------------------------------<br>'
+            'Total guest e-mails sent: %s<br>'
+            '--------------------------------------<br>'
+            'Successful Jobs: %s<br>'
+            '--------------------------------------<br>'
+            'Failed Jobs: %s<br>'
+            '--------------------------------------<br><br><br>' 
+        ) % (users_email_qty_sent, str(successful_job_count), str(failed_job_count)) 
         admin_email_msg = admin_email_msg + email_admin_report
         
         #Send Notification E-mail to Admin
@@ -580,7 +595,7 @@ def main(argv):
             i+=1
         print('\nSending e-mail to Admin Recipient: ' + fmt_admin_email_receiver_address + '\n' + report_heading + '\n' + '-' * 100)
         print(admin_email_msg)
-        print('-'*100)
+        print('-' * 100)
         admin_email_subject = report_heading
         send_generic_mail(email_server, admin_email_sender_name, admin_email_sender_address, admin_email_receiver_name, admin_email_receiver_address, admin_email_subject, admin_email_msg)
         print('-' * 100)

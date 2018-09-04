@@ -48,7 +48,7 @@ job_data.csv
 
 Job ID definition file:
 
-	id   		Job id (taken as argument by the script
+	id   		Job id (taken as argument by the script)
 	wlcIP   	WLC IP where the guest accounts need to be created
 	wlcName   	Hostname of WLC
 	user_prefix 	User prefix test used for creation of users (_1 _2 _3 etc will be appended to each user created)
@@ -84,7 +84,7 @@ You will probably need to install the following:
 	pip install numpy
 	pip install configparser
 	pip install pytz
-	...maybe more or less package installation are required depending on your installation of python3
+	...maybe more or less packages installation are required depending on your installation of python3
 
 
 
